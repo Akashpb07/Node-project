@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bug Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0fdf4;
+    --surface: #ffffff;
+    --border: rgba(16,130,90,0.12);
+    --border2: rgba(13,14,13,0.22);
+    --text: #052e16;
+    --muted: #4a7c6a;
+    --accent: #0f766e;
+    --green: #15803d;
+    --red: #dc2626;
+    --blue: #2563eb;
+    --orange: #ea580c;
+    --purple: #7c3aed;
+    --indigo: #4f46e5;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  /* ── LOADING STATE ── */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 16px;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 14px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── ERROR STATE ── */
+  #error {
+    display: none;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 16px;
+    padding: 24px;
+    margin: 40px auto;
+    max-width: 600px;
+  }
+
+  #error h3 { color: var(--red); margin-bottom: 8px; }
+  #error p  { font-size: 14px; color: #7f1d1d; font-family: 'DM Mono', monospace; }
+
+  /* ── DASHBOARD ── */
+  #dashboard { display: none; }
+
+  /* ── HEADER ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(15,118,110,0.10);
+    border: 1px solid rgba(15,118,110,0.28);
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin-bottom: 10px;
+  }
+
+  .badge::before {
+    content: '';
+    display: block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .meta {
+    font-size: 14px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 28px;
+  }
+
+  /* ── REFRESH BUTTON ── */
+  .refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 28px;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .refresh-btn:hover { background: #0d6460; transform: translateY(-1px); }
+  .refresh-btn:active { transform: translateY(0); }
+  .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  /* ── KPI ROW — 3 CARDS ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+
+  .kpi {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border2);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(16,130,90,0.08);
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .kpi.valid::before   { background: linear-gradient(90deg,#15803d,#4ade80); }
+  .kpi.invalid::before { background: linear-gradient(90deg,#dc2626,#fb7185); }
+  .kpi.stories::before { background: linear-gradient(90deg,#2563eb,#60a5fa); }
+
+  .kpi-num {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .kpi.valid   .kpi-num { color: var(--green); }
+  .kpi.invalid .kpi-num { color: var(--red); }
+  .kpi.stories .kpi-num { color: var(--blue); }
+
+  .kpi-label {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  /* ── GRIDS ── */
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 6px rgba(16,130,90,0.07);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .card:hover {
+    border-color: var(--border2);
+    box-shadow: 0 6px 24px rgba(15,118,110,0.12);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .icon-teal   { background: rgba(15,118,110,0.12); }
+  .icon-purple { background: rgba(124,58,237,0.12); }
+  .icon-blue   { background: rgba(37,99,235,0.12); }
+  .icon-amber  { background: rgba(202,138,4,0.12); }
+  .icon-rose   { background: rgba(220,38,38,0.10); }
+  .icon-indigo { background: rgba(79,70,229,0.12); }
+  .icon-green  { background: rgba(21,128,61,0.12); }
+  .icon-orange { background: rgba(234,88,12,0.12); }
+
+  .card-icon {
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; }
+
+  th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 6px 0 10px;
+    border-bottom: 1px solid var(--border2);
+    text-align: left;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(15,118,110,0.04); }
+
+  td {
+    padding: 10px 0;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  td:last-child {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .total-row td {
+    font-weight: 700;
+    border-top: 1px solid var(--border2) !important;
+    padding-top: 12px;
+    background: rgba(15,118,110,0.05);
+  }
+
+  .total-row td:last-child { color: var(--accent); }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 28px 0 16px;
+  }
+
+  .divider span {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border2);
+  }
+
+  /* ── SUMMARY ── */
+  .summary {
+    font-size: 15px;
+    color: #334155;
+    line-height: 1.8;
+  }
+
+  .card-body {
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.75;
+  }
+
+  /* ── ANIMATION ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+    .kpi-row { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+    .grid-4, .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Fetching data from Jira...</div>
+</div>
+
+<!-- ERROR -->
+<div id="error">
+  <h3>⚠️ Failed to load dashboard</h3>
+  <p id="error-msg"></p>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+
+  <div class="badge">Monthly Report</div>
+  <h1 id="project-name">—</h1>
+  <div class="meta">Bugs Data</div>
+
+  <button class="refresh-btn" onclick="loadDashboard()">
+    ↺ Refresh Data
+  </button>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi valid">
+      <div class="kpi-num" id="kpi-valid">—</div>
+      <div class="kpi-label">Valid Bugs</div>
+    </div>
+    <div class="kpi invalid">
+      <div class="kpi-num" id="kpi-invalid">—</div>
+      <div class="kpi-label">Invalid Bugs</div>
+    </div>
+    <div class="kpi stories">
+      <div class="kpi-num" id="kpi-stories">—</div>
+      <div class="kpi-label">Passed User Stories</div>
+    </div>
+  </div>
+
+  <!-- 4 DATA CARDS -->
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-teal">⚡</div><div class="card-title">Priority</div></div>
+      <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody id="priority-rows"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-purple">🔍</div><div class="card-title">Bug Cause</div></div>
+      <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody id="bugcause-rows"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-blue">🧪</div><div class="card-title">Testing Activity</div></div>
+      <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody id="testing-rows"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-amber">🌐</div><div class="card-title">Environment</div></div>
+      <table><thead><tr><th>Combo</th><th>Count</th></tr></thead><tbody id="env-rows"></tbody></table>
+    </div>
+  </div>
+
+  <div class="divider"><span></span><div class="line"></div></div>
+
+  <!-- STORY CARDS -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-green">🧩</div><div class="card-title" id="stories-title">Total Unique User Stories Linked with Bugs</div></div>
+      <div class="card-body" id="all-stories-list">—</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-indigo">🔄</div><div class="card-title" id="inprogress-title">Total Unique In Progress User Stories linked with Bugs</div></div>
+      <div class="card-body" id="inprogress-stories-list">—</div>
+    </div>
+  </div>
+
+  <div class="divider"><span>Bug Summary</span><div class="line"></div></div>
+
+  <div class="card" style="margin-bottom: 28px;">
+    <div class="summary" id="summary-text">—</div>
+  </div>
+
+  <div class="divider"><span>Critical &amp; High Bugs</span><div class="line"></div></div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-rose">🔥</div><div class="card-title" id="critical-title">Critical Bugs</div></div>
+      <div class="card-body" id="critical-list">None</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-icon icon-orange">🔺</div><div class="card-title" id="high-title">High Bugs</div></div>
+      <div class="card-body" id="high-list">None</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Helper: build table rows ──
+  function buildRows(obj) {
+    const entries = Object.entries(obj || {});
+    if (!entries.length) return '<tr><td colspan="2" style="color:var(--muted);font-style:italic;">No data</td></tr>';
+    const rows = entries.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+    const total = entries.reduce((a, [, v]) => a + v, 0);
+    return rows + `<tr class="total-row"><td>Total</td><td>${total}</td></tr>`;
+  }
+
+  // ── Helper: format obj as string ──
+  function format(obj) {
+    return Object.entries(obj || {}).map(([k, v]) => `${k}: ${v}`).join(', ') || 'None';
+  }
+
+  // ── Main load function ──
+  async function loadDashboard() {
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+
+    const btn = document.querySelector('.refresh-btn');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/dashboard');
+      const d = await res.json();
+
+      if (!res.ok) {
+        throw new Error(d.error + (d.hint ? '\n\nHint: ' + d.hint : ''));
+      }
+
+      // ── KPI ──
+      document.getElementById('project-name').textContent = d.projectName;
+      document.getElementById('kpi-valid').textContent   = d.validBugsTotal;
+      document.getElementById('kpi-invalid').textContent = d.invalidBugsTotal;
+      document.getElementById('kpi-stories').textContent = d.passedStoriesTotal;
+
+      // ── Tables ──
+      document.getElementById('priority-rows').innerHTML = buildRows(d.priorityCount);
+      document.getElementById('bugcause-rows').innerHTML = buildRows(d.bugCauseCount);
+      document.getElementById('testing-rows').innerHTML  = buildRows(d.testingActivityCount);
+      document.getElementById('env-rows').innerHTML      = buildRows(d.envCombinationCount);
+
+      // ── Story cards ──
+      document.getElementById('stories-title').textContent =
+        `Total Unique User Stories Linked with Bugs (${d.uniqueStories.length})`;
+      document.getElementById('inprogress-title').textContent =
+        `Total Unique In Progress User Stories linked with Bugs (${d.uniqueInProgressStories.length})`;
+      document.getElementById('all-stories-list').textContent =
+        d.uniqueStories.join(', ') || 'None';
+      document.getElementById('inprogress-stories-list').textContent =
+        d.uniqueInProgressStories.join(', ') || 'None';
+
+      // ── Critical / High ──
+      document.getElementById('critical-title').textContent =
+        `Critical Bugs (${d.criticalBugs.length})`;
+      document.getElementById('high-title').textContent =
+        `High Bugs (${d.highBugs.length})`;
+      document.getElementById('critical-list').innerHTML =
+        d.criticalBugs.map(x => `• ${x}`).join('<br>') || 'None';
+      document.getElementById('high-list').innerHTML =
+        d.highBugs.map(x => `• ${x}`).join('<br>') || 'None';
+
+      // ── Summary ──
+      const invalidSummary = Object.entries(d.invalidByResolution || {})
+        .map(([k, v]) => `${k}: ${v}`).join(', ') || 'None';
+
+      let criticalText = '';
+      if (d.criticalBugs.length > 0) {
+        criticalText = `<b>${d.criticalBugs.length} Critical bug(s) were reported:</b><br>`;
+        d.criticalBugs.forEach(s => { criticalText += `&nbsp;&nbsp;• 1 Critical bug was reported because ${s}<br>`; });
+        criticalText += '<br>';
+      }
+
+      let highText = '';
+      if (d.highBugs.length > 0) {
+        highText = `<b>${d.highBugs.length} High bug(s) were reported:</b><br>`;
+        d.highBugs.forEach(s => { highText += `&nbsp;&nbsp;• 1 High bug was reported because ${s}<br>`; });
+        highText += '<br>';
+      }
+
+      document.getElementById('summary-text').innerHTML = `
+        <b>Insights Bug Summary:</b><br><br>
+        Out of ${d.validBugsTotal} total reported bugs,
+        ${d.bugsWithStories} bugs were associated with
+        ${d.uniqueStories.length} User Stories and
+        ${d.unlinkedBugs} bugs were identified during regression testing that are not associated with any user story.<br><br>
+        ${criticalText}
+        ${highText}
+        ${d.invalidBugsTotal} Additional bug(s) were logged but later marked as ${invalidSummary}<br><br>
+        Out of total ${d.validBugsTotal} bug(s),
+        ${d.bugsWithInProgressStories} bug(s) were tied to
+        ${d.uniqueInProgressStories.length} In Progress User Stories.<br><br>
+        <b>Testing Activity:</b> ${format(d.testingActivityCount)}<br>
+        <b>Bug Cause:</b> ${format(d.bugCauseCount)}<br>
+        <b>Environment Bug Found:</b> ${format(d.envCombinationCount)}<br>
+      `;
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error-msg').textContent = err.message;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // Auto-load on page open
+  loadDashboard();
+</script>
+</body>
+</html>
